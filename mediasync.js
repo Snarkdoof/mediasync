@@ -313,6 +313,27 @@ var mediascape = function(_MS_) {
     };
 
 
+    let getTime = function(elem, cb) {
+      if (elem.paused) {
+        console.log("Paused, returning position", elem.currentTime);
+        cb(elem.currentTime);
+        return;
+      }
+
+      elem.requestVideoFrameCallback((ts, meta) => {
+
+        console.log("Paused", elem.paused, to.vel);
+        let due_in = (meta.expectedDisplayTime - performance.now()) / 1000;
+        if (due_in < 0.05) {
+            // Too late, retry later
+            getTime(elem, cb);
+        }
+
+        let currentTime = meta.mediaTime - due_in;
+        cb(currentTime);
+      });
+    }
+
     function loop(pos) {
       if (options.loop) {
         if (options.duration) {
@@ -491,6 +512,61 @@ var mediascape = function(_MS_) {
         console.log("Error setting variable playback speed - seems broken", err);
         _setUpdateFunc(update_func_skip);
       }
+    };
+
+
+    let preroll_timer;
+    let preroll_fudge = 0.250;  // We start with 250ms skip-ahead, if it's bad, we'll update it
+    var update_func_preroll = function(ev) {
+      clearTimeout(preroll_timer);
+      if (_stopped || _paused) {
+        return;
+      }
+
+      var snapshot = query();
+
+      var duration = elem.duration;
+      var new_pos;
+      if (duration) {
+        if (snapshot.pos < 0 || snapshot.pos > duration) {  // Use snapshot, skew is not part of this
+          if (!elem.paused) {
+            elem.currentTime = duration - 0.03;
+            elem.pause();
+          }
+          return;
+        }
+      }
+
+      if (snapshot.vel != 1) {
+        elem.pause();
+        elem.currentTime = snapshot.pos;
+        return;
+      }
+
+      // We now skip ahead a bit, then pause, then unpause when ready!
+      
+       // How far ahead to jump? If too short, we'll have to skip again, if
+       // too long, we'll be paused for a while. 
+       elem.currentTime = snapshot.pos + preroll_fudge;
+
+       // Now we wait
+       let play_timeout;
+       let play_if_ready = function(currentTime) {
+          clearTimeout(play_timeout);
+          let now = query().pos;
+          if (Math.abs(now - currentTime) < 0.005) {
+            elem.play();
+            return;
+          } else if (now - currentTime < 0) {
+            // We're too late, need to try again;
+            setTimeout(update_func_preroll);
+            return;
+          }
+
+          // We're not there yet, wait for at most 50ms
+          play_timeout = setTimeout(play_if_ready, Math.min(50, (now - elem.currentTime) * 1000));
+       }
+       getTime(elem, play_if_ready);
     };
 
     var last_pos;
