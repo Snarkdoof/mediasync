@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title></title>
+</head>
+<body>
+
+    <video src="https://mediafutures.norceresearch.no/sfi/res/bbt_s01e02.mp4" controls></video>
+    <button class="playbtn">Play</button>
+
+<script>
+
+    let preroll = function(vid, pos) {
+        vid.currentTime = pos;
+        let _f = function() {vid.removeEventListener("playing", _f); synchronizing = false; vid.pause();}
+        vid.addEventListener("playing", _f);
+        vid.play();
+    }
+
+
+    document.querySelector(".playbtn").addEventListener("click", () => {
+        let vid = document.querySelector("video");
+        vid.pause();
+        let target = Math.random() * vid.duration;
+        let doPreroll = Math.random() < 0.5;
+        if (doPreroll)
+            preroll(vid, target);
+
+        setTimeout(() => {
+            let startts;
+            vid.onplaying = () => {vid.onplaying = undefined; console.log((performance.now() - startts).toFixed(1), "ms Preroll:", doPreroll);};
+            vid.currentTime = target;
+            startts = performance.now();
+            vid.play();
+        }, 1000);
+
+    });
+
+
+</script>
+
+</body>
+</html>

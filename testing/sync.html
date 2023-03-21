@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title></title>
+    <script src="https://mcorp.no/lib/mcorp-2.0.1.js"></script>
+    <script src="https://webtiming.github.io/timingsrc/lib/timingsrc-v2.js"></script>
+  <script src="https://mcorp.no/lib/mcorp-2.0.1.js"></script>
+
+</head>
+<body>
+
+
+    <video src="https://mediafutures.norceresearch.no/sfi/res/bbt_s01e02.mp4" controls></video>
+<button class="startbtn">START</button>
+<script>
+
+
+    /**
+     * Sync provides a similar function to setTimeout, but it is based
+     * on an MSV as opposed to local time, and the target is absolute.
+     *
+     * For example, calling sync(myfunc, 1.01, mymsv) will trigger
+     * callback of myfunc when the msv hits the point 0.01 (regardless
+     * of speed or direction of the msv).  It can however take arbitrary time
+     */
+    var setSync = function (func, target, msv) {
+        if (msv.vel == 0) {
+            // We stopped, trigger a single sync when the MSV changes
+            function handle_change() {
+                setSync(func, target, msv);
+                msv.off("change", handle_change);
+            };
+
+            msv.on("change", handle_change);
+            return this;        
+        }
+            
+        var time_left = target - msv.pos;
+        if (time_left > 0.05) {
+            var sub_timer = setTimeout(function() {setSync(func, target, msv)}, Math.abs((time_left/2.)/msv.vel));
+            //return sub_timer;
+            return this;
+        }
+        
+        while (true) {
+            if (msv.vel == 0) {
+                console.log("MSV Stopped while in tight loop");
+                return setSync(func, target, msv);
+            }
+            time_left = target - msv.pos;
+            if (time_left < 0.001) break;
+            if (time_left > 0.055) break; // Missed it, abort
+        }
+        console.log(performance.now(), "Cb", msv.pos, target);
+        func.call();
+        return null;
+    }
+
+
+let to = new TIMINGSRC.TimingObject();
+// var app = {};
+
+let app = MCorp.app("4704154345375000225");
+app.ready.then(() => to.timingsrc = app.motions.private);
+
+//var app = MCorp.app("2651007742477449579", {anon: true});
+// app.ready.then(() => {});
+
+
+
+let getTime = function(elem, cb) {
+    if (elem.paused) {
+        cb(elem.currentTime);
+        return;
+    }
+
+    if (!elem.frequestVideoFrameCallback) {
+        cb(elem.currentTime);
+        return;
+    }
+
+    elem.requestVideoFrameCallback((ts, meta) => {
+        let due_in = (meta.expectedDisplayTime - performance.now()) / 1000;
+        if (due_in < 0.001) {
+            // Too late, retry later
+            // console.log("Due is too late", due_in);
+            getTime(elem, cb);
+            return;
+        }
+        let currentTime = meta.mediaTime - due_in;
+        // console.log("time is", meta.mediaTime, "due in", due_in, "currentTime", currentTime);
+        cb(currentTime);
+    });
+}
+
+
+let preroll = function(vid, pos) {
+    vid.currentTime = pos;
+    let _f = function() {vid.removeEventListener("playing", _f); synchronizing = false; vid.pause();}
+    vid.addEventListener("playing", _f);
+    vid.play();
+}
+
+let vid = document.querySelector("video");
+let startts = performance.now();
+var synchronizing = false;
+
+let cb = function(ts, meta) {
+    if (synchronizing) {console.log("Already synchronizing"); return;};
+
+    if (to.vel == 0) {
+        if (Math.abs(vid.currentTime - to.pos) < 0.001) {
+            sync(to, to.pos);
+        }
+    }
+    console.log("Paused:", vid.paused);
+    getTime(vid, (currentTime) => {
+        if (Math.abs(currentTime - to.pos) < 0.0033) return;
+        console.log("We're wrong", currentTime, to.pos, currentTime - to.pos);
+
+        sync(to, currentTime);
+    });
+
+    return;
+
+    let now = performance.now() / 1000;
+    let diff = (meta.mediaTime) - now;
+    let diff_ct = vid.currentTime - now;
+    let diff_diff = diff - diff_ct;
+    let due_in = (meta.expectedDisplayTime - performance.now()) / 1000;
+
+    if (due_in < 0) {
+        // We ignore this, it's too late and likely slightly off, do the next frame
+        vid.requestVideoFrameCallback(cb);
+        return;
+    }
+
+    let shownFrameTs = meta.mediaTime - due_in;
+
+    console.log("ts", shownFrameTs.toFixed(3), "mediaTime", diff.toFixed(3), "currentTime", diff_ct.toFixed(3), "diff", diff_diff.toFixed(3), "due in", due_in.toFixed(3));
+    // console.log(meta.presentationTime, meta.expectedDisplayTime, performance.now())
+
+    // Is this within what we're expecting, or do we need to jump/alter speeds?
+    // We try to jump then unpause at the right time
+    let currentTime = shownFrameTs;
+    if (Math.abs(currentTime - to.pos) < 0.0033) return;
+    if (currentTime - to.pos > 0) {
+        console.log("We're AHEAD");
+    } else if (currentTime - to.pos < -0) {
+        console.log("We're BEHIND", currentTime, currentTime - to.pos, vid.currentTime);
+    }
+
+    sync(to, currentTime);
+}
+
+let sync = function(to, currentTime) {
+
+    if (synchronizing) {
+        console.log("BAD BAD BAD, called sync when synchronizing");
+        return;
+    }
+    console.log("Sync to", currentTime, "to", to.pos);
+    synchronizing = true;
+
+    // If paused, just update
+    if (to.vel == 0) {
+        vid.currentTime = to.pos;
+        console.log("Preroll");
+        let _f = function() { console.log("Peroll OK"); vid.removeEventListener("playing", _f); synchronizing = false; vid.pause();}
+        vid.addEventListener("playing", _f);
+        vid.play();
+        return;
+    }
+
+
+    // Choose a point ahead then play when we're at that point
+    let fudge = 1.0;
+    let targetTime = to.pos + fudge;
+    vid.currentTime = targetTime;
+    let _f = function() { vid.removeEventListener("playing", _f); vid.pause(); console.log("Preroll playing OK");}
+    vid.addEventListener("playing", _f);
+    console.log("Preroll to", targetTime);
+    vid.play();
+
+    // We've asked it to jump fudge ahead, wait for that time to pass and then play
+    console.log(performance.now(), "SETSYNC", targetTime, targetTime - to.pos);
+    TIMINGSRC.setPointCallback(to, () => { synchronizing = false; window._thing = vid.play(); console.log(performance.now(), to.pos, "playing!");}, targetTime);
+    // setTimeout(() => {synchronizing = false; vid.play();}, fudge * 1000)
+};
+
+/*
+vid.addEventListener("seeked", () => setTimeout(vid.requestVideoFrameCallback(cb), 0));
+setInterval(() => vid.requestVideoFrameCallback(cb), 1000);
+
+to.on("change", () => {
+    sync(to, to.pos);
+});
+
+*/
+
+
+var query = function() {
+  // Handle both msvs and timing objects
+  if (to.version >= 3) {
+    var q = to.query();
+    return {
+      pos: q.position,
+      vel: q.velocity,
+      acc: q.acceleration
+    };
+  }
+  return to.query();
+};
+
+let _stopped = _paused = false;
+let elem = document.querySelector("video");
+let preroll_timer;
+let preroll_latency = 0.020;  // We expect 50ms latency for play to start, we'll ajust
+let preroll_skipahead = 0.250;  // We start with 250ms skip-ahead, if it's bad, we'll update it
+var update_func_preroll = function(ev) {
+    if (synchronizing) return;
+  clearTimeout(preroll_timer);
+  if (_stopped || _paused) {
+    return;
+  }
+  var snapshot = query();
+
+  var duration = elem.duration;
+  var new_pos;
+  if (duration) {
+    if (snapshot.pos < 0 || snapshot.pos > duration) {  // Use snapshot, skew is not part of this
+      if (!elem.paused) {
+        console.log("Paused beyond duration", duration - 0.03);
+        elem.currentTime = duration - 0.03;
+        elem.pause();
+      }
+      return;
+    }
+  }
+
+  if (snapshot.vel != 1) {
+    elem.pause();
+    elem.currentTime = snapshot.pos;
+    return;
+  } else {
+    if (elem.paused) {
+        // We're running but video isn't, re-run the function
+        // setTimeout(update_func_preroll, 100);
+        console.log("Playing but paused on sync, seems weird");
+    }
+  }
+
+
+   let play_timeout;
+   let play_if_ready = function(currentTime, preroll_latency) {
+
+        clearTimeout(play_timeout);
+        if (to.vel == 0) return;
+
+        let now = to.pos;
+        if (Math.abs(now - currentTime) < 0.005 || currentTime - now < preroll_latency) {
+            elem._last_play = performance.now();
+            elem.play();
+
+            synchronizing = false;
+            console.log("PLAY!", currentTime - to.pos);
+            return;
+        } else if (currentTime - now < 0) {
+            // We're too late, need to try again;
+            console.log("Too slow, restarting", currentTime - now);
+            setTimeout(update_func_preroll, 0);
+            synchronizing = false;
+            return;
+        }
+
+        // We're not there yet, wait for at most 50ms
+        let _timeout = Math.min(50, (currentTime - now) * 1000);
+        play_timeout = setTimeout(() => play_if_ready(currentTime, preroll_latency), _timeout);
+   }
+   getTime(elem, (currentTime) => {
+    // currentTime += preroll_latency;
+
+    // Are we within limits?
+    console.log("DIFF", (currentTime - to.pos).toFixed(3), "neg. is late");
+
+    if (performance.now() - elem._last_play < 100) return;
+    let diff = currentTime - to.pos;
+
+    if (Math.abs(diff) < 0.025) {
+        preroll_latency += -diff;
+        if (0 && elem.paused) {
+            elem.play();  // Play if it isn't
+            console.log("PLAY (we're within limits)", currentTime - to.pos);
+        }
+        return;
+    }
+
+    synchronizing = true;
+
+    if (diff < 0.2 && diff > -0.4 && Math.abs(diff) > 0.020 && performance.now() - elem._last_play > 50 && performance.now() - elem._last_play < 200) {
+        preroll_latency = Math.max(0, preroll_latency - diff);
+        console.log("preroll_latency set to", preroll_latency, performance.now() - elem._last_play);
+    }
+
+
+    // We're outside of limits, jump ahead and get going
+    console.log("Prerolling to", (to.pos + preroll_skipahead).toFixed(3), "diff", (currentTime - to.pos).toFixed(3), "latency", preroll_latency.toFixed(3));
+    elem.pause();
+    elem.currentTime = to.pos + preroll_skipahead;
+    play_if_ready(elem.currentTime, preroll_latency);
+   });
+};
+
+
+
+//vid.addEventListener("seeked", () => setTimeout(vid.requestVideoFrameCallback(cb), 0));
+//setInterval(() => vid.requestVideoFrameCallback(cb), 1000);
+
+document.querySelector(".startbtn").addEventListener("click", () => {
+    to.on("change", () => {
+        update_func_preroll();
+    });
+
+
+    vid.preroll_latency = 0.0;
+    vid.addEventListener("playing", () => {
+        if (vid._last_play) {        
+            vid.preroll_latency = performance.now() - vid._last_play;
+            console.log("Preroll latency", vid.preroll_latency);
+        }
+    });
+
+    document.querySelector(".startbtn").style.display = "none";
+
+    setTimeout(() => to.update({position:Math.random()*vid.duration, velocity:1}), 100);
+    //setTimeout(() => to.update({velocity:0}), 10000);
+
+    vid.addEventListener("play", () => getTime(vid, (ts) => { console.log("playing, diff", (ts - to.pos).toFixed(3));}));
+
+    //vid.addEventListener("play", update_func_preroll);
+
+    //setInterval(() => getTime(vid, (ts) => { console.log((ts - to.pos).toFixed(3));}), 250);
+
+    setTimeout(update_func_preroll, 200);
+    //setInterval(update_func_preroll, 1000);
+    to.on("timeupdate", update_func_preroll);
+
+});
+
+</script>
+</body>
+</html>
