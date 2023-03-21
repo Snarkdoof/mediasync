@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>
+    </title>
+  <script src="https://mcorp.no/lib/mcorp-2.0.1.js"></script>
+    <script src="https://webtiming.github.io/timingsrc/lib/timingsrc-v3.js"></script>
+
+<style>
+
+</style>
+</head>
+<body>
+
+
+<video src="/sfi/res/bbt_s01e02.mp4"></video>
+<button onclick="play()">Play</button>
+<button onclick="skip()">Skip</button>
+<button onclick="preroll()">Preroll</button>
+<script>
+
+
+let elem = document.querySelector("video");
+let to = new TIMINGSRC.TimingObject();
+
+let app = MCorp.app("4704154345375000225");
+app.ready.then(() => to.timingsrc = app.motions.private);
+
+
+let defaults = {
+    responseTime: 0.0
+};
+
+if (!localStorage["__play_stats__"]) {
+    localStorage["__play_stats__"] = JSxON.stringify(defaults);
+}
+var playerStats = JSON.parse(localStorage["__play_stats__"]);
+if (Math.abs(playerStats.responseTime) > 0.1) playerStats.responseTime = 0;
+
+let responseDiff = 0.0;  // What's the response diff currently?
+let prerollTime = 1000;  // How long to skip ahead - should be about 3x responseTime?
+let stats = [];
+let target = 0.030;
+let is_synchronizing = false;
+
+function play() {
+    elem.play();
+    to.on("change", preroll);
+}
+
+
+function check() {
+    elem.requestVideoFrameCallback((ts, meta) => {
+    let due_in = (meta.expectedDisplayTime - performance.now()) / 1000;
+        if (due_in < 0.001) {
+            // Too late, retry later
+            // console.log("Due is too late", due_in);
+            return;
+        }
+
+    let mediatime = meta.mediaTime;
+
+    // mediatime
+    currentTime = mediatime - ((meta.expectedDisplayTime - ts) / 1000);
+
+    responseDiff = -(currentTime - to.pos);
+
+    stats.push(currentTime - to.pos);
+    if (stats.length > 10) {
+        stats.shift();
+    }
+
+    console.log("CB", currentTime - to.pos, getDiff());  // , currentTime - elem.currentTime, responseDiff);
+    }); 
+
+    let diff = getDiff();
+    if (Math.abs(diff) > target) {
+        console.log("Need to sync");
+        preroll();
+    }
+}
+
+function check_currentTime() {
+    responseDiff = -(elem.currentTime - to.pos);
+    console.log("CT", elem.currentTime - to.pos);
+}
+
+function skip() {
+    let newpos = Math.random() * elem.duration;
+    console.log("Skip to", newpos)
+    // We'll update the timing object too
+    to.update({position: newpos, velocity: 1});
+    elem.currentTime = newpos + 0.225;
+}
+
+
+function preroll() {
+    stats = [];
+    /*
+    if (is_synchronizing) return;
+    is_synchronizing = true;
+    let newpos = Math.random() * elem.duration;
+    to.update({position: newpos, velocity: 1});
+    console.log("Preroll to", newpos)
+*/
+    // We skip to position + a fudge, then sleep for however long is left
+
+    elem.pause();
+    elem.currentTime = to.pos + 1.0;
+    if (responseDiff)
+        playerStats.responseTime += responseDiff + 0.007;  // A bit of a frame too, just to hit "the middle"
+    localStorage["__player_stats"] = JSON.stringify(playerStats);
+    //let prerollTime = playerStats.responseTime * 3;
+    let seekok = false;
+    elem.addEventListener("seeked", () => { 
+        if (seekok) return;
+        seekok = true;
+        console.log("Play in",  prerollTime * (elem.currentTime - to.pos - playerStats.responseTime), "response time", playerStats.responseTime)
+        setTimeout(() => elem.play(), prerollTime * (elem.currentTime - to.pos - playerStats.responseTime))
+        is_synchronizing = false;
+    });
+}
+
+function getDiff() {
+    if (stats.length < 10) return 0;
+    let sum = 0;
+    stats.forEach((i) => sum += i);
+    return sum / stats.length;
+}
+
+function finetune() {
+    // 
+}
+
+setInterval(check, 250);
+//setInterval(check_currentTime, 1000);
+
+</script>
+</body>
+</html>

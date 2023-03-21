@@ -67,7 +67,7 @@ app.ready.then(() => to.timingsrc = app.motions.private);
 
 //var app = MCorp.app("2651007742477449579", {anon: true});
 // app.ready.then(() => {});
-
+let last_skip = 0;
 
 
 let getTime = function(elem, cb) {
@@ -76,13 +76,14 @@ let getTime = function(elem, cb) {
         return;
     }
 
-    if (!elem.frequestVideoFrameCallback) {
+    if (!elem.requestVideoFrameCallback) {
         cb(elem.currentTime);
         return;
     }
 
     elem.requestVideoFrameCallback((ts, meta) => {
         let due_in = (meta.expectedDisplayTime - performance.now()) / 1000;
+        console.log("CB", ts, meta, due_in);
         if (due_in < 0.001) {
             // Too late, retry later
             // console.log("Due is too late", due_in);
@@ -218,7 +219,8 @@ let _stopped = _paused = false;
 let elem = document.querySelector("video");
 let preroll_timer;
 let preroll_latency = 0.020;  // We expect 50ms latency for play to start, we'll ajust
-let preroll_skipahead = 0.250;  // We start with 250ms skip-ahead, if it's bad, we'll update it
+//let preroll_skipahead = 0.250;  // We start with 250ms skip-ahead, if it's bad, we'll update it
+let preroll_skipahead = 1.0;  // We start with 250ms skip-ahead, if it's bad, we'll update it
 var update_func_preroll = function(ev) {
     if (synchronizing) return;
   clearTimeout(preroll_timer);
@@ -283,7 +285,7 @@ var update_func_preroll = function(ev) {
     // currentTime += preroll_latency;
 
     // Are we within limits?
-    console.log("DIFF", (currentTime - to.pos).toFixed(3), "neg. is late");
+    //console.log("DIFF", (currentTime - to.pos).toFixed(3), "neg. is late");
 
     if (performance.now() - elem._last_play < 100) return;
     let diff = currentTime - to.pos;
@@ -300,8 +302,9 @@ var update_func_preroll = function(ev) {
     synchronizing = true;
 
     if (diff < 0.2 && diff > -0.4 && Math.abs(diff) > 0.020 && performance.now() - elem._last_play > 50 && performance.now() - elem._last_play < 200) {
+        console.log("preroll_latency from", preroll_latency, "to", Math.max(0, preroll_latency - diff));
         preroll_latency = Math.max(0, preroll_latency - diff);
-        console.log("preroll_latency set to", preroll_latency, performance.now() - elem._last_play);
+        //console.log("preroll_latency updated to", preroll_latency, performance.now() - elem._last_play);
     }
 
 
