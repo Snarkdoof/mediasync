@@ -724,6 +724,11 @@ var mediascape = function(_MS_) {
         }
         _update_func = update_func_playbackspeed;
       }
+
+      if (options.mode === "preroll") {
+          _update_func = update_func_preroll;
+      }
+
       elem.removeEventListener("canplay", init);
       elem.removeEventListener("playing", init);
       _setUpdateFunc(_update_func);
