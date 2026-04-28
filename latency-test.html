@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raw Video Latency Diagnostic</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background: #f4f4f9; color: #333; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        video { width: 100%; max-width: 600px; background: black; display: block; margin: 0 auto 20px auto; border-radius: 4px; }
+        button { padding: 12px 24px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; display: block; margin: 0 auto 20px auto; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .stats { display: flex; justify-content: space-between; margin-bottom: 20px; text-align: center; }
+        .stat-box { background: #e9ecef; padding: 15px; border-radius: 4px; flex: 1; margin: 0 10px; }
+        .stat-value { font-size: 24px; font-weight: bold; font-family: monospace; color: #d63031; margin-top: 5px; }
+        canvas { width: 100%; height: 300px; background: #fff; border: 1px solid #ddd; border-radius: 4px; }
+        .log { margin-top: 20px; padding: 10px; background: #2d3436; color: #a29bfe; font-family: monospace; font-size: 12px; height: 150px; overflow-y: auto; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 style="text-align:center;">Raw Video Latency Test</h2>
+    <p style="text-align:center; font-size:0.9em; color:#666;">This tests pure browser media engine latency, completely independent of any Timing Object.</p>
+    
+    <video id="vid" src="https://mcorp.no/res/mork/mork-diy.mp4" crossorigin="anonymous" playsinline preload="auto"></video>
+    
+    <button id="btnRun">1. Unlock Audio & Run Diagnostic</button>
+
+    <div class="stats">
+        <div class="stat-box">
+            <div>Seek Time</div>
+            <div id="statSeek" class="stat-value">-- ms</div>
+        </div>
+        <div class="stat-box">
+            <div>Startup Latency</div>
+            <div id="statStart" class="stat-value">-- ms</div>
+        </div>
+        <div class="stat-box">
+            <div>Current Lag</div>
+            <div id="statLag" class="stat-value">-- ms</div>
+        </div>
+    </div>
+
+    <canvas id="chart"></canvas>
+    <div style="text-align:center; font-size:0.8em; margin-top:5px; color:#555;">
+        X-Axis: Time since play() was called (0 to 3000ms)<br>
+        Y-Axis: Lag (Real-world time elapsed - Video time elapsed)
+    </div>
+
+    <div class="log" id="logBox"></div>
+</div>
+
+<script>
+    const video = document.getElementById('vid');
+    const btn = document.getElementById('btnRun');
+    const chart = document.getElementById('chart');
+    const ctx = chart.getContext('2d');
+    const logBox = document.getElementById('logBox');
+
+    function log(msg) {
+        logBox.innerHTML += `<div>[${(performance.now()/1000).toFixed(3)}] ${msg}</div>`;
+        logBox.scrollTop = logBox.scrollHeight;
+        console.log(msg);
+    }
+
+    // Fix Canvas DPI
+    function setupCanvas() {
+        chart.width = chart.clientWidth * window.devicePixelRatio;
+        chart.height = chart.clientHeight * window.devicePixelRatio;
+    }
+    window.addEventListener('resize', setupCanvas);
+    setupCanvas();
+
+    let historyData = [];
+
+    btn.onclick = async () => {
+        btn.disabled = true;
+        historyData = [];
+        ctx.clearRect(0, 0, chart.width, chart.height);
+        
+        // Ensure audio context is unlocked
+        if (video.muted) {
+            log("Unlocking audio...");
+            video.muted = false;
+        }
+        await video.play().catch(e => {}); // Ignore play interrupt error
+        video.pause();
+
+        if (!video.duration || isNaN(video.duration)) {
+            log("Error: Video metadata not loaded yet. Waiting...");
+            await new Promise(r => video.addEventListener('loadedmetadata', r, {once:true}));
+        }
+
+        // 1. Pick a random position (leave 5 seconds at the end to prevent ending during test)
+        const randomPos = Math.random() * (video.duration - 5);
+        log(`Target random position: ${randomPos.toFixed(3)}s`);
+
+        // 2. Measure Seek Time
+        const tSeekStart = performance.now();
+        video.currentTime = randomPos;
+        
+        video.addEventListener('seeked', function onSeeked() {
+            video.removeEventListener('seeked', onSeeked);
+            const seekDuration = performance.now() - tSeekStart;
+            document.getElementById('statSeek').innerText = `${seekDuration.toFixed(1)} ms`;
+            log(`Seek completed in ${seekDuration.toFixed(1)}ms. Ready to play.`);
+
+            // 3. Ask to play and measure latency
+            const tPlayCall = performance.now();
+            video.play();
+            
+            let firstFrame = true;
+            let vfcId;
+
+            const frameLoop = (now, metadata) => {
+                // How much real-world time has passed since we called play()?
+                const realWorldElapsedMs = performance.now() - tPlayCall; 
+                
+                // How much media has actually been presented?
+                const mediaElapsedMs = (metadata.mediaTime - randomPos) * 1000;
+                
+                // Lag = How far behind the video is compared to a perfect 0-latency start
+                // e.g., if 500ms passed in the real world, but only 300ms of video played, Lag = 200ms
+                const lagMs = realWorldElapsedMs - mediaElapsedMs;
+
+                if (firstFrame) {
+                    firstFrame = false;
+                    document.getElementById('statStart').innerText = `${lagMs.toFixed(1)} ms`;
+                    log(`First frame presented! Startup Latency: ${lagMs.toFixed(1)}ms`);
+                }
+
+                document.getElementById('statLag').innerText = `${lagMs.toFixed(1)} ms`;
+
+                historyData.push({
+                    time: realWorldElapsedMs,
+                    lag: lagMs
+                });
+
+                drawChart();
+
+                // Run test for 3 seconds
+                if (realWorldElapsedMs < 3000) {
+                    vfcId = video.requestVideoFrameCallback(frameLoop);
+                } else {
+                    video.pause();
+                    log("Diagnostic complete.");
+                    btn.disabled = false;
+                    btn.innerText = "Run Diagnostic Again";
+                }
+            };
+
+            if (typeof video.requestVideoFrameCallback === "function") {
+                vfcId = video.requestVideoFrameCallback(frameLoop);
+            } else {
+                log("ERROR: browser does not support requestVideoFrameCallback.");
+                btn.disabled = false;
+            }
+        });
+    };
+
+    function drawChart() {
+        const w = chart.width;
+        const h = chart.height;
+        ctx.clearRect(0, 0, w, h);
+
+        if (historyData.length < 2) return;
+
+        // Grid
+        ctx.strokeStyle = '#eee';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for(let i=0; i<=5; i++) {
+            const y = h - (i/5)*h;
+            ctx.moveTo(0, y); ctx.lineTo(w, y);
+        }
+        ctx.stroke();
+
+        // Plot
+        ctx.strokeStyle = '#d63031';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        
+        // Assume max lag of 500ms for scale, min 0
+        const maxLagScale = 500; 
+
+        historyData.forEach((point, i) => {
+            const x = (point.time / 3000) * w;
+            const normalizedLag = Math.max(0, Math.min(point.lag, maxLagScale));
+            const y = h - ((normalizedLag / maxLagScale) * h);
+            
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        
+        ctx.stroke();
+    }
+</script>
+</body>
+</html>
