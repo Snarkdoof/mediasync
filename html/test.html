@@ -229,35 +229,55 @@
     </div>
 
     <script src="https://webtiming.github.io/timingsrc/lib/timingsrc-v3.js"></script>
-    <script src="dist/mediasync-v2.js"></script>
-    <script>
+    <script src="https://mcorp.no/lib/mediasync-v2.js"></script>
+    <script type="module">
+        import { MCorp } from 'https://www.mcorp.no/lib/mcorp-3.0.js?v=2';
+
         // Initialize
         const video = document.getElementById('testVideo');
-        const timing = new TIMINGSRC.TimingObject();
+        const timing = new TIMINGSRC.TimingObject(); // Local timing object for UI
         let sync;
 
+        const app = MCorp.app("79133357-049f-40ba-b713-cbf7974a408c", { anon: true });
+
         // Unlock media on interaction
-        document.getElementById('btnStartEnv').onclick = () => {
-            document.getElementById('startOverlay').style.display = 'none';
-            video.muted = false; // We want to test audio pitch changes!
-            video.play().then(() => {
+        document.getElementById('btnStartEnv').onclick = async () => {
+            const btn = document.getElementById('btnStartEnv');
+            btn.disabled = true;
+            btn.textContent = 'Connecting to MCorp...';
+
+            try {
+                await app.ready;
+                const cloudMotion = app.motions["global"];
+                if (!cloudMotion) throw new Error("Motion 'global' not found.");
+
+                // Link the local timing object to the cloud motion
+                // This ensures the local timing object drives/mirrors the cloud state
+                timing.timingsrc = cloudMotion.timingsrc;
+
+                document.getElementById('startOverlay').style.display = 'none';
+                video.muted = false; // We want to test audio pitch changes!
+                
+                await video.play();
                 video.pause();
-                // Initialize sync only after we've unlocked the video
+
+                // Initialize sync using the local timing object
                 sync = new MediaSync(video, timing, { 
                     debug: true,
                     macroThreshold: 0.15,
                     microThreshold: 0.025
                 });
+
                 // Initialize UI checkbox to reflect auto-detected/saved mode
                 document.getElementById('chkSkipMode').checked = (sync.options.mode === "skip");
                 updateStats();
-            }).catch(err => {
-                console.error("Failed to unlock video:", err);
-                // Fallback in case it fails, still try to run
-                sync = new MediaSync(video, timing, { debug: true, macroThreshold: 0.15, microThreshold: 0.025 });
-                document.getElementById('chkSkipMode').checked = (sync.options.mode === "skip");
-                updateStats();
-            });
+                
+            } catch (err) {
+                console.error("Initialization failed:", err);
+                alert("Failed to connect to MCorp: " + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Retry Start';
+            }
         };
 
         // UI Event Handlers

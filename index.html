@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCorp Sync Player</title>
+    <!-- MediaSync library for binding TimingObjects to HTML5 media elements -->
+    <script src="https://www.mcorp.no/lib/mediasync-v2.js?v=2"></script>
+    <style>
+        body {
+            margin: 0;
+            background: #121212;
+            color: #ffffff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .btn {
+            padding: 1rem 2rem;
+            font-size: 1.25rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin: 10px;
+        }
+        #loginBtn { background: #4285F4; color: white; }
+        #loginBtn:hover { background: #357ae8; }
+        #joinBtn { background: #3f51b5; color: white; display: none; }
+        #joinBtn:hover { background: #303f9f; }
+        
+        #playerContainer {
+            display: none;
+            width: 100%;
+            max-width: 960px;
+            padding: 20px;
+        }
+        video {
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        #errorMsg { color: #ff5252; margin-top: 10px; display: none; text-align: center; max-width: 80%; }
+        #status { margin-bottom: 20px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <div id="status">Please log in to continue</div>
+    <button id="loginBtn" class="btn">Login with Google</button>
+    <button id="joinBtn" class="btn">Join Sync Session</button>
+    <div id="errorMsg"></div>
+
+    <div id="playerContainer">
+        <video id="myVideo" src="https://mcorp.no/res/mork/mork-diy.mp4" controls></video>
+    </div>
+
+    <script type="module">
+        import { MCorp as MCorpModule } from 'https://www.mcorp.no/lib/mcorp-3.0.js?v=2';
+
+        const loginBtn = document.getElementById('loginBtn');
+        const joinBtn = document.getElementById('joinBtn');
+        const playerContainer = document.getElementById('playerContainer');
+        const video = document.getElementById('myVideo');
+        const errorMsg = document.getElementById('errorMsg');
+        const status = document.getElementById('status');
+
+        let app;
+
+        // Initialize MCorp without anonymous mode
+        try {
+            app = MCorpModule.app("d0862c04-0855-4792-8e09-c074441df3e4", { anon: false });
+	    window.mcorp_app = app;
+            console.log("MCorp App initialized (anon: false)");
+        } catch (e) {
+            console.error("Failed to initialize MCorp module:", e);
+        }
+
+        loginBtn.addEventListener('click', async () => {
+            try {
+                loginBtn.disabled = true;
+                loginBtn.textContent = 'Logging in...';
+                await app.login();
+                console.log("Login successful");
+                
+                loginBtn.style.display = 'none';
+                joinBtn.style.display = 'inline-block';
+                status.textContent = "Authenticated. Ready to join.";
+            } catch (error) {
+                console.error("Login failed:", error);
+                errorMsg.textContent = "Login failed: " + error.message;
+                errorMsg.style.display = 'block';
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Login with Google';
+            }
+        });
+
+        joinBtn.addEventListener('click', async () => {
+            joinBtn.disabled = true;
+            joinBtn.textContent = 'Connecting to Sync...';
+            errorMsg.style.display = 'none';
+
+            try {
+                console.log("Waiting for app.ready...");
+                await app.ready;
+                console.log("App ready. Motions:", Object.keys(app.motions));
+
+                const motion = app.motions["private"];
+                if (!motion) throw new Error("Motion 'private' not found. Ensure your AppID has this motion configured.");
+
+                window.timingObject = motion;
+                new MediaSync(video, window.timingObject);
+
+                status.style.display = 'none';
+                joinBtn.style.display = 'none';
+                playerContainer.style.display = 'block';
+                console.log("Sync active. window.timingObject available.");
+            } catch (error) {
+                console.error("Sync failed:", error);
+                errorMsg.textContent = "Sync Error: " + error.message;
+                errorMsg.style.display = 'block';
+                joinBtn.disabled = false;
+                joinBtn.textContent = 'Retry Join';
+            }
+        });
+    </script>
+</body>
+</html>
