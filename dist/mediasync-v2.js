@@ -45,9 +45,7 @@ class MediaSync {
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
     
     // Load persisted mode, or default based on browser
-    let savedMode = null;
-    try { savedMode = localStorage.getItem(this.options.modeKey); } catch(e) {}
-    
+    const savedMode = localStorage.getItem(this.options.modeKey);
     if (savedMode === "auto" || savedMode === "skip") {
       this.options.mode = savedMode;
     } else if (isSafari) {
@@ -57,9 +55,9 @@ class MediaSync {
     this.state = "INIT";
     
     // Empirical estimates from previous runs
-    this.estimatedStartupLatency = this._safeGetStorage(this.options.latencyKey, 0.020);
-    this.estimatedSeekTime = this._safeGetStorage(this.options.seekKey, 0.100);
-    this.estimatedReadyBuffer = this._safeGetStorage(this.options.readyKey, 0.200);
+    this.estimatedStartupLatency = parseFloat(localStorage.getItem(this.options.latencyKey)) || 0.020;
+    this.estimatedSeekTime = parseFloat(localStorage.getItem(this.options.seekKey)) || 0.100;
+    this.estimatedReadyBuffer = parseFloat(localStorage.getItem(this.options.readyKey)) || 0.200;
     
     this._vfcId = null;
     this._rafSyncId = null;
@@ -86,23 +84,6 @@ class MediaSync {
     this._boundOnSeeked = this._onSeeked.bind(this);
 
     this._init();
-  }
-
-  _safeGetStorage(key, defaultValue) {
-    try {
-      const val = localStorage.getItem(key);
-      return val !== null ? parseFloat(val) : defaultValue;
-    } catch (e) {
-      return defaultValue;
-    }
-  }
-
-  _safeSetStorage(key, value) {
-    try {
-      window.localStorage.setItem(key, value);
-    } catch (e) {
-      // Ignore storage errors (e.g. private mode)
-    }
   }
 
   _log(...args) {
@@ -273,7 +254,7 @@ class MediaSync {
 
     // Update estimate (weighted moving average)
     this.estimatedSeekTime = (this.estimatedSeekTime * 0.7) + (actualSeekDuration * 0.3);
-    this._safeSetStorage(this.options.seekKey, this.estimatedSeekTime.toFixed(3));
+    localStorage.setItem(this.options.seekKey, this.estimatedSeekTime.toFixed(3));
 
     this.video.removeEventListener("seeked", this._boundOnSeeked);
 
@@ -283,7 +264,7 @@ class MediaSync {
       const penalty = Math.abs(timeLeft) + 0.150;
       this.estimatedReadyBuffer += penalty; 
       this.estimatedReadyBuffer = Math.min(2.0, this.estimatedReadyBuffer);
-      this._safeSetStorage(this.options.readyKey, this.estimatedReadyBuffer.toFixed(3));
+      localStorage.setItem(this.options.readyKey, this.estimatedReadyBuffer.toFixed(3));
       
       this._log(`SEEK TOO SLOW: Missed trigger by ${Math.abs(timeLeft).toFixed(3)}s. Increasing ready buffer by ${penalty.toFixed(3)}s to ${this.estimatedReadyBuffer.toFixed(3)}s and re-seeking.`);
       this._startSeeking();
@@ -314,7 +295,7 @@ class MediaSync {
       if (this.video.seeking) {
         this.estimatedReadyBuffer += 0.200; // Add 200ms penalty
         this.estimatedReadyBuffer = Math.min(2.0, this.estimatedReadyBuffer); // Cap at 2s
-        this._safeSetStorage(this.options.readyKey, this.estimatedReadyBuffer.toFixed(3));
+        localStorage.setItem(this.options.readyKey, this.estimatedReadyBuffer.toFixed(3));
         this._log(`MISSED TRAIN: Player still seeking at trigger time. Increasing ready buffer to ${this.estimatedReadyBuffer.toFixed(3)}s and re-seeking.`);
         this._transition("SEEKING");
         return;
@@ -328,7 +309,7 @@ class MediaSync {
         const excessiveIdle = idleTime - 0.150;
         this.estimatedReadyBuffer -= (excessiveIdle * 0.20); 
         this.estimatedReadyBuffer = Math.max(0.050, this.estimatedReadyBuffer); // Floor at 50ms
-        this._safeSetStorage(this.options.readyKey, this.estimatedReadyBuffer.toFixed(3));
+        localStorage.setItem(this.options.readyKey, this.estimatedReadyBuffer.toFixed(3));
         this._log(`Buffer optimization: Idle for ${idleTime.toFixed(3)}s. Shrunk ready buffer to ${this.estimatedReadyBuffer.toFixed(3)}s.`);
       }
 
@@ -570,7 +551,7 @@ class MediaSync {
     
     this._log(`UPDATED LATENCY ESTIMATE: ${this.estimatedStartupLatency.toFixed(3)}s (Actual this run: ${actualStartupLatency.toFixed(3)}s, Allowance: ${this._playAllowance.toFixed(3)}s, Stabilized drift: ${stabilizedDrift.toFixed(3)}s)`);
     
-    this._safeSetStorage(this.options.latencyKey, this.estimatedStartupLatency.toFixed(3));
+    localStorage.setItem(this.options.latencyKey, this.estimatedStartupLatency.toFixed(3));
   }
 
   _applyMicroAdjustment(smoothedDrift, elapsedSincePlay) {
@@ -632,7 +613,7 @@ class MediaSync {
     if (this.options.mode === "auto" && this._macroAdjustmentTimes.length >= 2) {
       this._log("Multiple macro adjustments within 30s. Variable playback rate seems unstable. Falling back to SKIP mode permanently.");
       this.options.mode = "skip";
-      this._safeSetStorage(this.options.modeKey, "skip");
+      localStorage.setItem(this.options.modeKey, "skip");
       // Clear array so we don't spam logs if skip mode also triggers jumps
       this._macroAdjustmentTimes = []; 
     }
