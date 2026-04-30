@@ -1,7 +1,7 @@
 # Modern MediaSync Implementation Plan
 
 ## Phase 1: Core Implementation (Frontend Specialist)
-1. **Scaffolding:** Create `modern-mediasync.js`. Define the `ModernMediaSync` class structure, options parsing, and event listener attachments for the Timing Object and the HTMLVideoElement.
+1. **Scaffolding:** Create `mediasync-v2.js`. Define the `ModernMediaSync` class structure, options parsing, and event listener attachments for the Timing Object and the HTMLVideoElement.
 2. **Timing Object Integration:** Implement reading from the timing object. Handle `change` events to update the sync state. Support `velocity` extraction.
 3. **Latency Tracking:** Implement the `device_latency` estimation logic using `localStorage`. Set a default starting latency (e.g., 100ms).
 4. **State Machine & Pre-seeking:** Implement the `SEEKING` and `WAITING` states. 
@@ -15,7 +15,7 @@
 
 ## Phase 2: Testing & Visualization (Test Engineer)
 1. **Mock Timing Object:** Create a simple mock or use an existing Timing Object polyfill for testing.
-2. **Test Harness UI:** Create an `index.html` (or `test.html`) that loads a video file, the timing object, and `modern-mediasync.js`.
+2. **Test Harness UI:** Create an `index.html` (or `test.html`) that loads a video file, the timing object, and `mediasync-v2.js`.
 3. **Visualization:** Add a `<canvas>` or charting library to plot real-time metrics:
    - Device Latency estimate over time.
    - Sync Drift (actual `currentTime` vs target `TimingObject` time).

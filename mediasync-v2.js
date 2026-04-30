@@ -28,15 +28,15 @@ class MediaSync {
     
     this.options = {
       debug: false,
-      latencyKey: "modern_mediasync_latency",
-      seekKey: "modern_mediasync_seek_time",
+      latencyKey: "mediasync_v2_latency",
+      seekKey: "mediasync_v2_seek_time",
       latencyFudge: 1.000,   // MASSIVE margin to seek ahead (1s) to isolate play latency
       macroThreshold: 0.15,  // >150ms drift triggers macro adjustment (pause & re-seek)
       microThreshold: 0.025, // <25ms drift is considered perfectly in-sync (just let it play)
       skipThreshold: 0.033,  // >33ms drift triggers re-seek in skip mode
       slideTestMode: false,  // If true, stops all adjustments after first hitting perfect sync
-      modeKey: "modern_mediasync_mode",
-      readyKey: "modern_mediasync_ready_buffer",
+      modeKey: "mediasync_v2_mode",
+      readyKey: "mediasync_v2_ready_buffer",
       mode: "auto",          // "auto" (use playbackRate) or "skip" (only seek/wait)
       ...options
     };

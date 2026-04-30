@@ -1,6 +1,6 @@
 .PHONY: all clean build
 
-SRC = modern-mediasync.js
+SRC = mediasync-v2.js
 DIST_DIR = dist
 DIST_FILE = $(DIST_DIR)/mediasync-v2.js
 # MIN_FILE = $(DIST_DIR)/mediasync-v2.min.js

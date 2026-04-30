@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCorp Sync Player</title>
+    <!-- MediaSync library for binding TimingObjects to HTML5 media elements -->
+    <script src="https://www.mcorp.no/lib/mediasync-v2.js?v=5"></script>
+    <style>
+        body {
+            margin: 0;
+            background: #000000;
+            color: #ffffff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .btn {
+            padding: 1rem 2rem;
+            font-size: 1.25rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, opacity 0.5s;
+            margin: 10px;
+            display: none;
+            opacity: 0;
+        }
+        .btn.visible {
+            display: inline-block;
+            opacity: 1;
+        }
+        #loginBtn { background: #4285F4; color: white; }
+        #loginBtn:hover { background: #357ae8; }
+        #joinBtn { background: #3f51b5; color: white; }
+        #joinBtn:hover { background: #303f9f; }
+        
+        #playerContainer {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+            background: black;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        #errorMsg { color: #ff5252; margin-top: 10px; display: none; text-align: center; max-width: 80%; }
+        #status { margin-bottom: 20px; color: #aaa; transition: opacity 0.3s; z-index: 10; }
+    </style>
+</head>
+<body>
+
+    <div id="status">Initializing MCorp...</div>
+    <button id="loginBtn" class="btn">Login with Google</button>
+    <button id="joinBtn" class="btn">Join Sync Session</button>
+    <div id="errorMsg"></div>
+
+    <div id="playerContainer">
+        <video id="myVideo" src="https://mcorp.no/res/Inspector_Norse.mp4" playsinline></video>
+    </div>
+
+    <script type="module">
+        import { MCorp } from 'https://www.mcorp.no/lib/mcorp-3.0.js';
+
+        const loginBtn = document.getElementById('loginBtn');
+        const joinBtn = document.getElementById('joinBtn');
+        const playerContainer = document.getElementById('playerContainer');
+        const video = document.getElementById('myVideo');
+        const errorMsg = document.getElementById('errorMsg');
+        const status = document.getElementById('status');
+
+        let app;
+        let isReady = false;
+
+        function showButton(btn) {
+            btn.classList.add('visible');
+        }
+
+        function hideButtons() {
+            loginBtn.classList.remove('visible');
+            joinBtn.classList.remove('visible');
+            setTimeout(() => {
+                loginBtn.style.display = 'none';
+                joinBtn.style.display = 'none';
+            }, 500);
+        }
+
+        try {
+            app = MCorp.app("d0862c04-0855-4792-8e09-c074441df3e4", { anon: false });
+            window.mcorp_app = app;
+
+            app.ready.then(() => {
+                isReady = true;
+                status.textContent = "Authenticated. Click Join to start.";
+                loginBtn.style.display = 'none';
+                showButton(joinBtn);
+            });
+
+            setTimeout(() => {
+                if (!isReady) {
+                    status.textContent = "Please log in to continue";
+                    showButton(loginBtn);
+                }
+            }, 3000);
+
+        } catch (e) {
+            console.error("MCorp Initialization Error:", e);
+            status.textContent = "Initialization failed.";
+        }
+
+        loginBtn.addEventListener('click', async () => {
+            try {
+                loginBtn.disabled = true;
+                loginBtn.textContent = 'Opening Login...';
+                await app.login();
+            } catch (error) {
+                console.error("Login failed:", error);
+                errorMsg.textContent = "Login failed: " + error.message;
+                errorMsg.style.display = 'block';
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Login with Google';
+            }
+        });
+
+        joinBtn.addEventListener('click', async () => {
+            joinBtn.disabled = true;
+            joinBtn.textContent = 'Connecting...';
+            errorMsg.style.display = 'none';
+
+            try {
+                await app.ready;
+                const motion = app.motions["private"];
+                if (!motion) throw new Error("Motion 'private' not found.");
+
+                // Set global timingObject to the motion ITSELF as requested
+                window.timingObject = motion;
+                new MediaSync(video, window.timingObject);
+
+                status.style.display = 'none';
+                hideButtons();
+                playerContainer.style.display = 'block';
+                
+                setupKeyboardControls();
+            } catch (error) {
+                console.error("Sync failed:", error);
+                errorMsg.textContent = "Sync Error: " + error.message;
+                errorMsg.style.display = 'block';
+                joinBtn.disabled = false;
+                joinBtn.textContent = 'Retry Join';
+            }
+        });
+
+        function setupKeyboardControls() {
+            window.addEventListener('keydown', (e) => {
+                if (!window.timingObject) return;
+
+                switch(e.code) {
+                    case 'Space':
+                        e.preventDefault();
+                        const v = window.timingObject.vector.velocity === 0 ? 1.0 : 0.0;
+                        window.timingObject.update({ velocity: v });
+                        break;
+                    case 'Enter':
+                        e.preventDefault();
+                        if (!document.fullscreenElement) {
+                            playerContainer.requestFullscreen().catch(err => {
+                                console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+                            });
+                        } else {
+                            document.exitFullscreen();
+                        }
+                        break;
+                    case 'ArrowRight':
+                        e.preventDefault();
+                        // Random jump within video duration (assuming ~42s if unknown, but let's try to get it)
+                        const duration = video.duration || 42; 
+                        const randomPos = Math.random() * duration;
+                        window.timingObject.update({ position: randomPos });
+                        break;
+                    case 'ArrowLeft':
+                        e.preventDefault();
+                        window.timingObject.update({ position: 0.0 });
+                        break;
+                }
+            });
+        }
+    </script>
+</body>
+</html>

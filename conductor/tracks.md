@@ -2,4 +2,4 @@
 
 | Track ID | Description | Status | Link |
 | :--- | :--- | :--- | :--- |
-| `modern-mediasync` | Modern implementation of MediaSync using rVFC and pre-seeking. | Active | [modern-mediasync](./tracks/modern-mediasync/index.md) |
+| `mediasync-v2` | Modern implementation of MediaSync using rVFC and pre-seeking. | Active | [mediasync-v2](./tracks/mediasync-v2/index.md) |
