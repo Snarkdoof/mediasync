@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MediaSync Test Harness</title>
+    <title>MediaSync v2 Test Harness</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -27,81 +27,66 @@
             margin-bottom: 20px;
             font-size: 1.2rem;
         }
-        #btnStartEnv {
+        #btnStartStandard, #btnStartBasic {
             padding: 15px 30px;
-            font-size: 1.2rem;
-            background: #2ed573;
+            font-size: 1.1rem;
             color: white;
             border: none;
             border-radius: 8px;
             cursor: pointer;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+            margin: 0 10px;
         }
-        #btnStartEnv:hover {
-            background: #27ae60;
-        }
+        #btnStartStandard { background: #007bff; }
+        #btnStartStandard:hover { background: #0069d9; transform: translateY(-1px); }
+        #btnStartBasic { background: #2ed573; }
+        #btnStartBasic:hover { background: #27ae60; transform: translateY(-1px); }
+
         .container {
             max-width: 1000px;
             margin: 0 auto;
             background: white;
             padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         }
-        h1 { margin-top: 0; }
+        h1 { margin-top: 0; font-size: 1.5rem; color: #1c1e21; }
         .video-section {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
             margin-bottom: 20px;
+            position: relative;
         }
         video {
             width: 100%;
-            max-width: 640px;
-            border-radius: 4px;
-            background: #000;
+            display: block;
+            max-height: 400px;
         }
         .controls {
+            padding: 15px;
+            background: #f8f9fa;
+            border-top: 1px solid #eee;
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
-            justify-content: center;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            width: 100%;
-            box-sizing: border-box;
+            align-items: center;
         }
         button {
             padding: 8px 16px;
+            border-radius: 6px;
             border: 1px solid #ddd;
             background: white;
-            border-radius: 4px;
             cursor: pointer;
             font-weight: 600;
             transition: all 0.2s;
         }
-        button:hover {
-            background: #e9ecef;
-            border-color: #ccc;
-        }
-        button.primary {
-            background: #007bff;
-            color: white;
-            border-color: #007bff;
-        }
-        button.primary:hover {
-            background: #0056b3;
-        }
-        button.danger {
-            color: #dc3545;
-            border-color: #dc3545;
-        }
-        button.danger:hover {
-            background: #dc3545;
-            color: white;
-        }
+        button:hover { background: #f1f2f6; }
+        button.primary { background: #007bff; color: white; border-color: #007bff; }
+        button.primary:hover { background: #0069d9; }
+        button.danger { background: #ff4757; color: white; border-color: #ff4757; }
+        
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -109,44 +94,33 @@
             margin-bottom: 20px;
         }
         .stat-card {
-            background: #f8f9fa;
             padding: 15px;
-            border-radius: 4px;
-            border-left: 4px solid #007bff;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #eee;
         }
-        .stat-label {
-            font-size: 0.8rem;
-            color: #65676b;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-        }
-        .stat-value {
-            font-size: 1.2rem;
-            font-weight: bold;
-            font-family: monospace;
-        }
+        .stat-label { font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-value { font-size: 1.2rem; font-weight: 700; color: #2d3436; font-family: monospace; }
+        
         .visualization {
-            margin-top: 20px;
+            background: white;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 10px;
         }
         canvas {
             width: 100%;
-            height: 300px;
+            height: 200px;
             background: #fff;
-            border: 1px solid #ddd;
-            border-radius: 4px;
         }
         .legend {
             display: flex;
             gap: 20px;
             justify-content: center;
             margin-top: 10px;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
+        .legend-item { display: flex; align-items: center; gap: 6px; }
         .legend-color {
             width: 12px;
             height: 12px;
@@ -156,16 +130,19 @@
 </head>
 <body>
     <div id="startOverlay">
-        <p>Browsers require user interaction to allow unmuted video synchronization.</p>
-        <button id="btnStartEnv">Start Test Environment</button>
+        <p>Select synchronization engine to begin:</p>
+        <div style="display:flex; gap:20px;">
+            <button id="btnStartStandard">Start Standard MediaSync</button>
+            <button id="btnStartBasic">Start BasicMediaSync</button>
+        </div>
     </div>
     
     <div class="container">
-        <h1>MediaSync Test Harness</h1>
+        <h1>MediaSync v2 Test Harness</h1>
         
         <div class="video-section">
             <video id="testVideo" muted loop playsinline>
-                <source src="https://mcorp.no/res/mork/mork-diy.mp4">
+		    <source src="https://mcorp.no/res/mork/mork-tour_de_senja.mp4"/>
                 Your browser does not support the video tag.
             </video>
             
@@ -228,23 +205,34 @@
         </div>
     </div>
 
-    <script src="https://webtiming.github.io/timingsrc/lib/timingsrc-v3.js"></script>
-    <script src="https://mcorp.no/lib/mediasync-v2.js"></script>
+    <script src="basic-mediasync.js"></script>
+    <script src="timing-media-session.js"></script>
+    <script src="mediasync-v2.js"></script>
     <script type="module">
-        import { MCorp } from 'https://www.mcorp.no/lib/mcorp-3.0.js?v=2';
+        import { MCorp, TIMINGSRC } from 'https://www.mcorp.no/lib/mcorp-3.0.js?v=2';
 
         // Initialize
         const video = document.getElementById('testVideo');
-        const timing = new TIMINGSRC.TimingObject(); // Local timing object for UI
+        const timing = new TIMINGSRC.TimingObject(); // Local timing object, exactly matching MCorp's version
+	window.to = timing;
         let sync;
+        let session;
 
         const app = MCorp.app("79133357-049f-40ba-b713-cbf7974a408c", { anon: true });
 
-        // Unlock media on interaction
-        document.getElementById('btnStartEnv').onclick = async () => {
-            const btn = document.getElementById('btnStartEnv');
-            btn.disabled = true;
-            btn.textContent = 'Connecting to MCorp...';
+        const initSync = async (useBasic) => {
+            const btnStandard = document.getElementById('btnStartStandard');
+            const btnBasic = document.getElementById('btnStartBasic');
+            
+            btnStandard.disabled = true;
+            btnBasic.disabled = true;
+            btnStandard.textContent = 'Connecting...';
+
+            // CRUCIAL: Unlock the media element SYNCHRONOUSLY within the click handler 
+            // before any 'await' yields the event loop. This satisfies strict browser policies (Safari/iOS).
+            video.muted = false;
+            video.play().catch(e => console.warn("Initial play unlock failed:", e));
+            video.pause();
 
             try {
                 await app.ready;
@@ -252,36 +240,53 @@
                 if (!cloudMotion) throw new Error("Motion 'global' not found.");
 
                 // Link the local timing object to the cloud motion
-                // This ensures the local timing object drives/mirrors the cloud state
-                timing.timingsrc = cloudMotion.timingsrc;
+                timing.timingsrc = cloudMotion;
 
                 document.getElementById('startOverlay').style.display = 'none';
-                video.muted = false; // We want to test audio pitch changes!
-                
-                await video.play();
-                video.pause();
 
-                // Initialize sync using the local timing object
-                sync = new MediaSync(video, timing, { 
-                    debug: true,
-                    macroThreshold: 0.15,
-                    microThreshold: 0.025
-                });
+                // Initialize Media Session integration
+                const TimingMediaSessionClass = window.TimingMediaSession;
+                if (TimingMediaSessionClass) {
+                    session = new TimingMediaSessionClass(timing, {
+                        title: "MediaSync v2 Test",
+                        artist: "MCorp",
+                        album: "Sync Testing Harness"
+                    });
+                }
+
+                // Get classes from global scope
+                const MediaSyncClass = window.MediaSync;
+                const BasicMediaSyncClass = window.BasicMediaSync;
+                const SyncClass = useBasic ? BasicMediaSyncClass : MediaSyncClass;
+                
+                if (SyncClass) {
+                    sync = new SyncClass(video, timing, { 
+                        debug: true,
+                        macroThreshold: 0.15,
+                        microThreshold: 0.025
+                    });
+                }
 
                 // Initialize UI checkbox to reflect auto-detected/saved mode
-                document.getElementById('chkSkipMode').checked = (sync.options.mode === "skip");
+                if (sync && sync.options && sync.options.mode) {
+                    document.getElementById('chkSkipMode').checked = (sync.options.mode === "skip");
+                }
                 updateStats();
                 
             } catch (err) {
                 console.error("Initialization failed:", err);
                 alert("Failed to connect to MCorp: " + err.message);
-                btn.disabled = false;
-                btn.textContent = 'Retry Start';
+                btnStandard.disabled = false;
+                btnBasic.disabled = false;
+                btnStandard.textContent = 'Start Standard MediaSync';
             }
         };
 
+        document.getElementById('btnStartStandard').onclick = () => initSync(false);
+        document.getElementById('btnStartBasic').onclick = () => initSync(true);
+
         // UI Event Handlers
-        document.getElementById('btnPlay').onclick = () => timing.update({velocity: 1.0});
+        document.getElementById('btnPlay').onclick = () => timing.update({position: 0.0, velocity: 1.0});
         document.getElementById('btnPause').onclick = () => timing.update({velocity: 0});
         document.getElementById('btn09x').onclick = () => timing.update({velocity: 0.9});
         document.getElementById('btn1x').onclick = () => timing.update({velocity: 1.0});
@@ -313,9 +318,11 @@
         };
 
         document.getElementById('chkSkipMode').onchange = (e) => {
-            if (sync) {
+            if (sync && sync.options) {
                 sync.options.mode = e.target.checked ? "skip" : "auto";
-                localStorage.setItem(sync.options.modeKey, sync.options.mode);
+                if (sync.options.modeKey) {
+                    localStorage.setItem(sync.options.modeKey, sync.options.mode);
+                }
                 if (e.target.checked && Math.abs(sync.currentSmoothedDrift) > sync.options.skipThreshold) {
                     sync._log("Switched to skip mode and drift exceeds threshold. Forcing re-seek.");
                     sync._transition("SEEKING");
@@ -351,11 +358,12 @@
 
         function updateStats() {
             if (!sync) return;
-            const drift = sync.currentSmoothedDrift;
-            const currentLatency = sync.activeLatency;
-            const readyBuffer = sync.estimatedReadyBuffer;
+            const drift = sync.currentSmoothedDrift || 0;
+            const currentLatency = sync.activeLatency || 0;
+            const readyBuffer = sync.estimatedReadyBuffer || 0;
+            const rawDrift = sync.currentRawDrift || 0;
 
-            document.getElementById('statState').textContent = sync.state;
+            document.getElementById('statState').textContent = sync.state || "N/A";
             document.getElementById('statLatency').textContent = `${currentLatency.toFixed(3)}s (+${readyBuffer.toFixed(3)}s)`;
             document.getElementById('statDrift').textContent = (drift * 1000).toFixed(1) + 'ms';
             document.getElementById('statRate').textContent = video.playbackRate.toFixed(3);
@@ -365,7 +373,7 @@
                 time: now,
                 latency: currentLatency,
                 drift: drift,
-                rawDrift: sync.currentRawDrift,
+                rawDrift: rawDrift,
                 rate: video.playbackRate
             });
             if (history.length > MAX_HISTORY) history.shift();

@@ -75,6 +75,7 @@ class MediaSync {
     this._framesIgnored = 0;
     this._startupLatencyEvaluated = false;
     this._macroAdjustmentTimes = [];
+    this._scriptTriggeredAction = false;
 
     // Bound methods for predictable event listener management
     this._boundOnTimingChange = this._onTimingChange.bind(this);
@@ -82,6 +83,8 @@ class MediaSync {
     this._boundFallbackSyncLoop = this._fallbackSyncLoop.bind(this);
     this._boundCheckWaiting = this._checkWaiting.bind(this);
     this._boundOnSeeked = this._onSeeked.bind(this);
+    this._boundOnNativePlay = this._onNativePlay.bind(this);
+    this._boundOnNativePause = this._onNativePause.bind(this);
 
     this._init();
   }
@@ -96,8 +99,38 @@ class MediaSync {
   _init() {
     this._log("Initializing. Startup Latency:", this.estimatedStartupLatency.toFixed(3), "Seek Time:", this.estimatedSeekTime.toFixed(3));
     this.timing.on("change", this._boundOnTimingChange);
+    
+    // Listen for native media element events to detect user interaction
+    this.video.addEventListener("play", this._boundOnNativePlay);
+    this.video.addEventListener("pause", this._boundOnNativePause);
+
     // Trigger initial state assessment
     this._onTimingChange();
+  }
+
+  _onNativePlay() {
+    if (this._scriptTriggeredAction) return;
+    this._log("User-initiated Play detected. Updating Timing Object.");
+    this.timing.update({ velocity: 1.0 });
+  }
+
+  _onNativePause() {
+    if (this._scriptTriggeredAction) return;
+    this._log("User-initiated Pause detected. Updating Timing Object.");
+    this.timing.update({ velocity: 0.0 });
+  }
+
+  /**
+   * Helper to perform video operations while bypassing native event logic
+   */
+  _videoAction(fn) {
+    this._scriptTriggeredAction = true;
+    try {
+      return fn();
+    } finally {
+      // Small delay to ensure the event loop processes the resulting events before we clear the flag
+      setTimeout(() => { this._scriptTriggeredAction = false; }, 50);
+    }
   }
 
   /**
@@ -167,8 +200,10 @@ class MediaSync {
 
     switch (newState) {
       case "PAUSED":
-        this.video.pause();
-        this.video.playbackRate = this._baseVelocity || 1.0;
+        this._videoAction(() => {
+          this.video.pause();
+          this.video.playbackRate = this._baseVelocity || 1.0;
+        });
         break;
       case "SEEKING":
         this._startSeeking();
@@ -235,9 +270,11 @@ class MediaSync {
     
     this._log(`Seeking to ${this._targetTime.toFixed(3)} (Est seek duration: ${this.estimatedSeekTime.toFixed(3)})`);
     
-    this.video.pause();
-    this.video.playbackRate = Math.max(0.1, Math.abs(this._baseVelocity));
-    this.video.currentTime = this._targetTime;
+    this._videoAction(() => {
+      this.video.pause();
+      this.video.playbackRate = Math.max(0.1, Math.abs(this._baseVelocity));
+      this.video.currentTime = this._targetTime;
+    });
 
     this._tSeekStart = performance.now();
     this.video.addEventListener("seeked", this._boundOnSeeked);

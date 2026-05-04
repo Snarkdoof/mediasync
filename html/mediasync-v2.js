@@ -1,0 +1,1 @@
+../dist/mediasync-v2.js
