@@ -38,6 +38,7 @@ class MediaSync {
       modeKey: "mediasync_v2_mode",
       readyKey: "mediasync_v2_ready_buffer",
       mode: "auto",          // "auto" (use playbackRate) or "skip" (only seek/wait)
+      skew: 0.0,             // Offset to add to the timing object position
       ...options
     };
 
@@ -139,7 +140,7 @@ class MediaSync {
    */
   _getTimingPositionAtAccurate() {
       // The timing object's query() returns the position evaluated at the moment query() is called.
-      return this.timing.query().position;
+      return this.timing.query().position + this.options.skew;
   }
 
   _getTimingPositionAtEvent(eventTime) {
@@ -150,7 +151,7 @@ class MediaSync {
       const dt = (eventTime - now) / 1000;
       
       const q = this.timing.query();
-      return q.position + (q.velocity * dt) + (0.5 * (q.acceleration || 0) * Math.pow(dt, 2));
+      return q.position + (q.velocity * dt) + (0.5 * (q.acceleration || 0) * Math.pow(dt, 2)) + this.options.skew;
   }
 
   _onTimingChange() {
@@ -393,6 +394,19 @@ class MediaSync {
       return this.manualLatencyOverride;
     }
     return this.estimatedStartupLatency;
+  }
+
+  get skew() {
+    return this.options.skew;
+  }
+
+  set skew(value) {
+    const num = parseFloat(value);
+    if (!isNaN(num) && num !== this.options.skew) {
+      this.options.skew = num;
+      this._log(`Skew updated to ${this.options.skew}s`);
+      this._onTimingChange(); // Trigger re-evaluation
+    }
   }
 
   get currentSmoothedDrift() {

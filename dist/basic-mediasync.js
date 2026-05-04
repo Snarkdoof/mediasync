@@ -25,6 +25,7 @@ class BasicMediaSync {
     this.options = {
       debug: false,
       threshold: 1.0,  // 1 second drift threshold
+      skew: 0.0,       // Offset to add to the timing object position
       ...options
     };
 
@@ -79,6 +80,7 @@ class BasicMediaSync {
     const query = this.timing.query();
     this._baseVelocity = query.velocity;
     const duration = this.video.duration;
+    const targetPos = query.position + this.options.skew;
     
     if (this._baseVelocity === 0) {
       if (!this.video.paused) {
@@ -86,16 +88,16 @@ class BasicMediaSync {
         this._videoAction(() => this.video.pause());
       }
       // If timing object jumped while paused, sync frame
-      if (Math.abs(query.position - this.video.currentTime) > this.options.threshold) {
-         this._videoAction(() => { this.video.currentTime = query.position; });
+      if (Math.abs(targetPos - this.video.currentTime) > this.options.threshold) {
+         this._videoAction(() => { this.video.currentTime = targetPos; });
       }
       return;
     }
 
     // Range Check: Pause if outside media bounds and moving away
     if (duration && !isNaN(duration)) {
-        if ((query.position >= duration && this._baseVelocity > 0) || 
-            (query.position <= 0 && this._baseVelocity < 0)) {
+        if ((targetPos >= duration && this._baseVelocity > 0) || 
+            (targetPos <= 0 && this._baseVelocity < 0)) {
             if (!this.video.paused) {
                 this._log("Timing object out of bounds. Pausing.");
                 this._videoAction(() => this.video.pause());
@@ -129,7 +131,7 @@ class BasicMediaSync {
     if (query.velocity === 0) return;
 
     const duration = this.video.duration;
-    let targetTime = query.position;
+    let targetTime = query.position + this.options.skew;
 
     // Clamp target time to valid media range
     if (duration && !isNaN(duration)) {
@@ -139,10 +141,28 @@ class BasicMediaSync {
 
     const drift = Math.abs(targetTime - this.video.currentTime);
     if (drift > this.options.threshold) {
-      this._log(`Sync drift exceeded threshold (${drift.toFixed(2)}s). Seeking to ${targetTime.toFixed(3)}s (Raw: ${query.position.toFixed(3)}s).`);
+      this._log(`Sync drift exceeded threshold (${drift.toFixed(2)}s). Seeking to ${targetTime.toFixed(3)}s (Raw: ${query.position.toFixed(3)}s, Skew: ${this.options.skew}s).`);
       this._videoAction(() => { this.video.currentTime = targetTime; });
     }
   }
+
+  get skew() {
+    return this.options.skew;
+  }
+
+  set skew(value) {
+    const num = parseFloat(value);
+    if (!isNaN(num) && num !== this.options.skew) {
+      this.options.skew = num;
+      this._log(`Skew updated to ${this.options.skew}s`);
+      this._onTimingChange(); // Trigger re-evaluation
+    }
+  }
+
+  // Stubbed properties for drop-in compatibility with MediaSync v2
+  get activeLatency() { return 0; }
+  get currentSmoothedDrift() { return 0; }
+  get currentRawDrift() { return 0; }
 
   destroy() {
     this.timing.off("change", this._boundOnTimingChange);
