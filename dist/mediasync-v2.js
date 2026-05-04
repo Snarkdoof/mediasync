@@ -409,9 +409,11 @@ class MediaSync {
     }
   }
 
-  get currentSmoothedDrift() {
-    return this._smoothedDrift;
-  }
+  // Legacy API compatibility
+  getSkew() { return this.skew; }
+  setSkew(value) { this.skew = value; }
+
+  get currentSmoothedDrift() { return this._smoothedDrift; }
 
   get currentRawDrift() {
     return this._currentRawDrift;

@@ -159,6 +159,10 @@ class BasicMediaSync {
     }
   }
 
+  // Legacy API compatibility
+  getSkew() { return this.skew; }
+  setSkew(value) { this.skew = value; }
+
   // Stubbed properties for drop-in compatibility with MediaSync v2
   get activeLatency() { return 0; }
   get currentSmoothedDrift() { return 0; }
