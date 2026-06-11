@@ -25,7 +25,7 @@ $(DIST_FILE): $(SRC) | $(DIST_DIR)
 	@echo "Build successful: $(DIST_FILE) created."
 
 $(MIN_FILE): $(DIST_FILE)
-	npx --yes terser $(DIST_FILE) -o $(MIN_FILE) -c -m --comments '/^!|Copyright|License/'
+	npx --yes --registry=https://registry.npmjs.org terser $(DIST_FILE) -o $(MIN_FILE) -c -m --comments '/^!|Copyright|License/'
 	@echo "Minification successful: $(MIN_FILE) created."
 
 $(DIST_BASIC): $(SRC_BASIC) | $(DIST_DIR)
@@ -33,7 +33,7 @@ $(DIST_BASIC): $(SRC_BASIC) | $(DIST_DIR)
 	@echo "Build successful: $(DIST_BASIC) created."
 
 $(MIN_BASIC): $(DIST_BASIC)
-	npx --yes terser $(DIST_BASIC) -o $(MIN_BASIC) -c -m --comments '/^!|Copyright|License/'
+	npx --yes --registry=https://registry.npmjs.org terser $(DIST_BASIC) -o $(MIN_BASIC) -c -m --comments '/^!|Copyright|License/'
 	@echo "Minification successful: $(MIN_BASIC) created."
 
 $(DIST_SESSION): $(SRC_SESSION) | $(DIST_DIR)
@@ -41,7 +41,7 @@ $(DIST_SESSION): $(SRC_SESSION) | $(DIST_DIR)
 	@echo "Build successful: $(DIST_SESSION) created."
 
 $(MIN_SESSION): $(DIST_SESSION)
-	npx --yes terser $(DIST_SESSION) -o $(MIN_SESSION) -c -m --comments '/^!|Copyright|License/'
+	npx --yes --registry=https://registry.npmjs.org terser $(DIST_SESSION) -o $(MIN_SESSION) -c -m --comments '/^!|Copyright|License/'
 	@echo "Minification successful: $(MIN_SESSION) created."
 
 clean:

@@ -209,7 +209,7 @@
     <script src="timing-media-session.js"></script>
     <script src="mediasync-v2.js"></script>
     <script type="module">
-        import { MCorp, TIMINGSRC } from 'https://www.mcorp.no/lib/mcorp-3.0.js?v=2';
+        import { MCorp, TIMINGSRC } from 'https://mcorp.no/lib/mcorp-3.0-esm.js';
 
         // Initialize
         const video = document.getElementById('testVideo');
@@ -251,6 +251,27 @@
                         title: "MediaSync v2 Test",
                         artist: "MCorp",
                         album: "Sync Testing Harness"
+                    }, {
+                        mediaElement: video,
+                        forwardSkipInterval: 30,
+                        backwardSkipInterval: 15,
+                        onSeekForward: (details) => {
+                            console.log("[Test] Custom onSeekForward called!");
+                            const q = timing.query();
+                            timing.update({ position: q.position + 30 });
+                        },
+                        onSeekBackward: (details) => {
+                            console.log("[Test] Custom onSeekBackward called!");
+                            const q = timing.query();
+                            timing.update({ position: Math.max(0, q.position - 15) });
+                        }
+                    });
+
+                    // Test dynamic callback override mapping
+                    session.setActionHandler('nexttrack', () => {
+                        console.log("[Test] Dynamic nexttrack handler triggered! Jumping 100 seconds fwd.");
+                        const q = timing.query();
+                        timing.update({ position: q.position + 100 });
                     });
                 }
 

@@ -36,6 +36,7 @@ class BasicMediaSync {
     this._boundOnTimeUpdate = this._onTimeUpdate.bind(this);
     this._boundOnNativePlay = this._onNativePlay.bind(this);
     this._boundOnNativePause = this._onNativePause.bind(this);
+    this._boundOnVisibilityChange = this._onVisibilityChange.bind(this);
 
     this._init();
   }
@@ -52,6 +53,17 @@ class BasicMediaSync {
     this.video.addEventListener("timeupdate", this._boundOnTimeUpdate);
     this.video.addEventListener("play", this._boundOnNativePlay);
     this.video.addEventListener("pause", this._boundOnNativePause);
+
+    // Modern mobile resume & tab-visibility change handlers
+    document.addEventListener("visibilitychange", this._boundOnVisibilityChange);
+    window.addEventListener("pageshow", this._boundOnVisibilityChange);
+    window.addEventListener("focus", this._boundOnVisibilityChange);
+
+    this._onTimingChange();
+  }
+
+  _onVisibilityChange() {
+    this._log("Visibility, pageshow, or focus change detected. Checking/forcing sync state.");
     this._onTimingChange();
   }
 
@@ -106,17 +118,38 @@ class BasicMediaSync {
         }
     }
 
-    // Ensure playback speed matches timing object
-    if (Math.abs(this.video.playbackRate - this._baseVelocity) > 0.01) {
-      this._log(`Adjusting playbackRate to ${this._baseVelocity}`);
-      this._videoAction(() => { this.video.playbackRate = this._baseVelocity; });
-    }
-
     if (this.video.paused) {
       this._log("Timing object playing. Starting video.");
+
+      // CRITICAL FOR MOBILE: If the media element is paused and we need to resume,
+      // seek to the correct position FIRST (while paused) to avoid "hot seeking" 
+      // during a play transition, which causes audio dropout / WebKit audio channel loss.
+      const drift = Math.abs(targetPos - this.video.currentTime);
+      if (drift > this.options.threshold) {
+         this._log(`Syncing position before play: seeking to ${targetPos.toFixed(3)}s (drift: ${drift.toFixed(2)}s).`);
+         this._videoAction(() => { this.video.currentTime = targetPos; });
+      }
+
       this._videoAction(() => {
-          this.video.play().catch(e => this._log("Play failed", e));
+          this.video.play()
+            .then(() => {
+              // CRITICAL FOR MOBILE: Only adjust playbackRate AFTER playback successfully starts.
+              // Changing playbackRate on a paused or transitioning media element on iOS/WebKit 
+              // triggers an audio pipeline reset that silences output.
+              if (Math.abs(this.video.playbackRate - this._baseVelocity) > 0.01) {
+                this._log(`Adjusting playbackRate to ${this._baseVelocity} after play start`);
+                this._videoAction(() => { this.video.playbackRate = this._baseVelocity; });
+              }
+            })
+            .catch(e => this._log("Play failed", e));
       });
+      return;
+    } else {
+      // If already playing, we can safely adjust the playbackRate directly
+      if (Math.abs(this.video.playbackRate - this._baseVelocity) > 0.01) {
+        this._log(`Adjusting playbackRate to ${this._baseVelocity}`);
+        this._videoAction(() => { this.video.playbackRate = this._baseVelocity; });
+      }
     }
 
     this._checkSync();
@@ -173,6 +206,11 @@ class BasicMediaSync {
     this.video.removeEventListener("timeupdate", this._boundOnTimeUpdate);
     this.video.removeEventListener("play", this._boundOnNativePlay);
     this.video.removeEventListener("pause", this._boundOnNativePause);
+    if (this._boundOnVisibilityChange) {
+      document.removeEventListener("visibilitychange", this._boundOnVisibilityChange);
+      window.removeEventListener("pageshow", this._boundOnVisibilityChange);
+      window.removeEventListener("focus", this._boundOnVisibilityChange);
+    }
     this._log("Destroyed");
   }
 }
